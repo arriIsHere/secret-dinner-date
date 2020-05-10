@@ -14,6 +14,7 @@ interface DinnerDateMember {
 
 interface DinnerDateInstance {
 	channel: string;
+	waitingForConfirmReset: boolean;
 	joined: DinnerDateMember[];
 	createdBy: string;
 }
@@ -42,7 +43,12 @@ async function createDinnerDateUser(dinnerDate: DinnerDateInstance,user: Discord
 }
 
 function createDinnerDate(client: Discord.Client, dinnerDateInstances: {[key: string] : DinnerDateInstance}, createdBy: string, channel: string):DinnerDateInstance {
-	return dinnerDateStates[channel] = {channel, joined: [], createdBy};
+	return dinnerDateInstances[channel] = {
+		channel, 
+		waitingForConfirmReset: false,
+		joined: [], 
+		createdBy
+	};
 }
 
 async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, activeDms: {[key: string]: DinnerDateMember}, dinnerDateId: string): Promise<void> {
@@ -112,10 +118,17 @@ bot.on('message', async (message) => {
 	
 		// Create a new dinner date
 		else if(message.content === '!dinnerdate') {
-			createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
 
-			console.log(`New dinner date for channel ${message.channel.id} added by ${message.author.username}`);
-			message.channel.send("You have set up a secret dinner date! type `!join` to enter! type `!draw` to draw all who joined! type `!bail` to cancel this dinner date.");
+			if(!!dinnerDateStates[message.channel.id]) {
+				dinnerDateStates[message.channel.id].waitingForConfirmReset = true;
+				console.log(`Attempt made to create duplicate dinner date for channel ${message.channel.id}`);
+				message.channel.send(`You already created dinner date here. Did you want to reset it? [yes/no]`);
+			} else {
+				createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
+				
+				console.log(`New dinner date for channel ${message.channel.id} added by ${message.author.username}`);
+				message.channel.send("You have set up a secret dinner date! type `!join` to enter! type `!draw` to draw all who joined! type `!bail` to cancel this dinner date.");
+			}
 		}
 	
 		// Have a user join an existing dinner date
@@ -130,6 +143,19 @@ bot.on('message', async (message) => {
 				openDm.send('Hello! thanks for joining the secret dinner date :spaghetti:!\nPlease reply to this message with your address!');
 			} else {
 				message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
+			}
+		}
+
+		// Waiting for confirm
+		else if(!!dinnerDateStates[message.channel.id] && dinnerDateStates[message.channel.id].waitingForConfirmReset) {
+			const lowerCaseContent = message.content.toLowerCase();
+			if(lowerCaseContent === 'yes' || lowerCaseContent === 'y') {
+				await deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id);
+				await createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
+				message.channel.send('Cool! I\'ll rest this dinner date instance :wilted_rose:');
+			} else if(lowerCaseContent === 'no' || lowerCaseContent === 'n') {
+				dinnerDateStates[message.channel.id].waitingForConfirmReset = false;
+				message.channel.send('Gotcha! Gonna leave this dinner date open :rose:');
 			}
 		}
 	}
