@@ -45,23 +45,32 @@ function createDinnerDate(client: Discord.Client, dinnerDateInstances: {[key: st
 	return dinnerDateStates[channel] = {channel, joined: [], createdBy};
 }
 
-async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, dinnerDateId: string): Promise<void> {
+async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, activeDms: {[key: string]: DinnerDateMember}, dinnerDateId: string): Promise<void> {
 	// Remove all the dms
 	const dinnerDate = dinnerDateInstances[dinnerDateId];
 
-	dinnerDate.joined.map(async ({dmChannel}) => {
-		const existingChannel = await client.channels.fetch(dmChannel) as Discord.DMChannel;
-
-		delete activeDms[dmChannel];
-
-		//Delete all messages that the bot authored
-		Array.from((await existingChannel.messages.fetch()).values()).filter(({author: {id}}) => id === client.user?.id).map(message => existingChannel.messages.delete(message));
-
-		return existingChannel.delete();
-	});
+	await cleanDinnerDateDms(client, dinnerDate, activeDms);
 
 	// Delete the instance
 	delete dinnerDateInstances[dinnerDateId];
+}
+
+async function cleanDinnerDateDms(client: Discord.Client, dinnerDateInstance: DinnerDateInstance, activeDms: {[key: string]: DinnerDateMember}): Promise<void> {
+	await Promise.all(dinnerDateInstance.joined.map(async (member) => {
+		await cleanDinnerDateMemberDms(client, member);
+		delete activeDms[member.dmChannel];
+	}));
+}
+
+async function cleanDinnerDateMemberDms(client: Discord.Client, dinnerDateMember: DinnerDateMember): Promise<void> {
+	const channel = await client.channels.fetch(dinnerDateMember.dmChannel) as Discord.DMChannel;
+
+	// Find all the messages, limit to 50 to preserve usage
+	const dmMessages = Array.from((await channel.messages.fetch({limit: 50})).values());
+	const botMessages = dmMessages.filter(({author: {id}}) => id === client.user?.id);
+
+	// Delete all messages in the list that the bot authored
+	await Promise.all(botMessages.map(async (message) => channel.messages.delete(message)))
 }
 
 bot.on('message', async (message) => {
@@ -92,9 +101,9 @@ bot.on('message', async (message) => {
 		else if(message.content === '!bail') {
 			// Check for existing state
 			if(!!dinnerDateStates[message.channel.id]) {
-				await deleteDinnerDate(bot, dinnerDateStates, message.channel.id);
+				console.log(`Dinnerdate for channel ${message.channel.id} removed`);
 
-				// Delete all 
+				await deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id);
 				message.channel.send("Alright! I will cancel that dinner date for you.\nType `!dinnerdate` if you want to create a new one!");
 			} else {
 				message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
@@ -105,7 +114,7 @@ bot.on('message', async (message) => {
 		else if(message.content === '!dinnerdate') {
 			createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
 
-			console.log(`New state for channel ${message.channel.id} added by ${message.author.username}`);
+			console.log(`New dinner date for channel ${message.channel.id} added by ${message.author.username}`);
 			message.channel.send("You have set up a secret dinner date! type `!join` to enter! type `!draw` to draw all who joined! type `!bail` to cancel this dinner date.");
 		}
 	
