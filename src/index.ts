@@ -14,7 +14,7 @@ interface DinnerDateMember {
 
 interface DinnerDateInstance {
 	channel: string;
-	users: DinnerDateMember[];
+	joined: DinnerDateMember[];
 	createdBy: string;
 }
 
@@ -33,7 +33,7 @@ async function createDinnerDateUser(dinnerDate: DinnerDateInstance,user: Discord
 	const dm = await user.createDM();
 	const newDateUser: DinnerDateMember = {discordUser: user.id, dateInstance: dinnerDate, dmChannel: dm.id};
 
-	dinnerDate.users.push(newDateUser);
+	dinnerDate.joined.push(newDateUser);
 	activeDms[newDateUser.dmChannel] = newDateUser;
 
 	console.log(`User ${user.username} added to the dinner date drawing`);
@@ -42,15 +42,20 @@ async function createDinnerDateUser(dinnerDate: DinnerDateInstance,user: Discord
 }
 
 function createDinnerDate(client: Discord.Client, dinnerDateInstances: {[key: string] : DinnerDateInstance}, createdBy: string, channel: string):DinnerDateInstance {
-	return dinnerDateStates[channel] = {channel, users: [], createdBy};
+	return dinnerDateStates[channel] = {channel, joined: [], createdBy};
 }
 
 async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, dinnerDateId: string): Promise<void> {
 	// Remove all the dms
 	const dinnerDate = dinnerDateInstances[dinnerDateId];
 
-	dinnerDate.users.map(async ({dmChannel}) => {
-		const existingChannel = await client.channels.fetch(dmChannel);
+	dinnerDate.joined.map(async ({dmChannel}) => {
+		const existingChannel = await client.channels.fetch(dmChannel) as Discord.DMChannel;
+
+		delete activeDms[dmChannel];
+
+		//Delete all messages that the bot authored
+		Array.from((await existingChannel.messages.fetch()).values()).filter(({author: {id}}) => id === client.user?.id).map(message => existingChannel.messages.delete(message));
 
 		return existingChannel.delete();
 	});
@@ -65,9 +70,7 @@ bot.on('message', async (message) => {
 
 		// Check for dm, will be in the DM channel
 		if(message.channel.type === 'dm') {
-
-			console.log(`DM recieved`);
-			if(!!activeDms[message.author.id]) {
+			if(!!activeDms[message.channel.id] && activeDms[message.channel.id].discordUser === message.author.id) {
 
 				// Update the address
 				console.log(`Address updated for ${message.author.username}`);
@@ -76,26 +79,30 @@ bot.on('message', async (message) => {
 				const guest = activeDms[message.channel.id];
 				guest.address = message.content;
 
+
+
 				// Send a response
 				message.channel.send('Awesome! Your address is now added to the list! You will get sent your dinner date\'s address when the drawing is over!\n if you want to change your address just reply to this message with the new one!');
+			} else if(message.author.id !== bot.user?.id) {
+				message.channel.send('Looks like you\'re not part of any dinner dates :cry:.\nTry asking your mystery date out by saying `!join` in an active channel.\nOr, create your own plans using `!dinnerdate` on your server.');
 			}
 		}
 
 		// Cancel the dinner date
-		if(message.content === '!bail') {
+		else if(message.content === '!bail') {
 			// Check for existing state
 			if(!!dinnerDateStates[message.channel.id]) {
 				await deleteDinnerDate(bot, dinnerDateStates, message.channel.id);
 
 				// Delete all 
-				message.channel.send("Alright! I will cancel that dinner date for you type `!dinnerdate` if you want to create a new one!");
+				message.channel.send("Alright! I will cancel that dinner date for you.\nType `!dinnerdate` if you want to create a new one!");
 			} else {
 				message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
 			}
 		}
 	
 		// Create a new dinner date
-		if(message.content === '!dinnerdate') {
+		else if(message.content === '!dinnerdate') {
 			createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
 
 			console.log(`New state for channel ${message.channel.id} added by ${message.author.username}`);
@@ -103,11 +110,11 @@ bot.on('message', async (message) => {
 		}
 	
 		// Have a user join an existing dinner date
-		if(message.content === '!join') {
+		else if(message.content === '!join') {
 			if(!!dinnerDateStates[message.channel.id]) {
 				const dinnerDate = dinnerDateStates[message.channel.id];
 	
-				const dateUser = dinnerDate.users.find(({discordUser}) => discordUser === message.author.id) ?? await createDinnerDateUser(dinnerDate, message.author);
+				const dateUser = dinnerDate.joined.find(({discordUser}) => discordUser === message.author.id) ?? await createDinnerDateUser(dinnerDate, message.author);
 
 				// Send the message even if they have already joined, something could have gone wrong
 				const openDm = await bot.channels.fetch(dateUser.dmChannel) as Discord.DMChannel;
