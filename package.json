@@ -39,7 +39,7 @@
   },
   "scripts": {
     "start": "node ./dist/index.js",
-    "dev": "babel-node -x \".ts\" src/index",
+    "dev": "NODE_ENV=development babel-node -x \".ts\" src/index.ts",
     "build": "NODE_ENV=production npm run build:source",
     "build:source": "babel src --out-dir dist -x \".ts\"",
     "build:type": "tsc --emitDeclarationOnly",
@@ -67,6 +67,6 @@
     "typescript": "^3.8.3"
   },
   "dependencies": {
-    "discord.io": "^2.5.3"
+    "discord.js": "^12.2.0"
   }
 }
