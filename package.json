@@ -39,6 +39,7 @@
   },
   "scripts": {
     "start": "node ./dist/index.js",
+    "dev": "babel-node -x \".ts\" src/index",
     "build": "NODE_ENV=production npm run build:source",
     "build:source": "babel src --out-dir dist -x \".ts\"",
     "build:type": "tsc --emitDeclarationOnly",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@babel/cli": "^7.8.4",
     "@babel/core": "^7.9.6",
+    "@babel/node": "^7.8.7",
     "@babel/preset-env": "^7.9.6",
     "@babel/preset-typescript": "^7.9.0",
     "@types/node": "^13.13.5",
