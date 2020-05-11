@@ -63,20 +63,28 @@ function drawDinnerDate(client: Discord.Client, dinnerDateInstance: DinnerDateIn
 
 	const unchosen = [...dinnerDateInstance.joined];
 
+	const extra = unchosen.length % 2 === 1 ? unchosen.pop() : undefined;
+
 	// Only deal with even instances
-	const dinnerDateMap: [DinnerDateMember, DinnerDateMember][] = dinnerDateInstance.joined.map((memeber, index) => {
+	const dinnerDateMap: [DinnerDateMember, DinnerDateMember][] = [...unchosen].map((member) => {
 
 		let randomIndex;
 
-		//do {
-			randomIndex = Math.floor(Math.random() * (unchosen.length + 1));
-		//} while(unchosen[randomIndex] !== memeber);
+		do {
+			randomIndex = Math.floor(Math.random() * (unchosen.length));
+		} while(unchosen[randomIndex] === member);
 
 		const pair = unchosen[randomIndex];
 		unchosen.splice(randomIndex, 1);
 
-		return [memeber, pair];
+		return [member, pair];
 	});
+
+	if(!!extra) {
+		const [to, from] = dinnerDateMap[0];
+		dinnerDateMap[0] = [to, extra];
+		dinnerDateMap.push([extra, from]);
+	}
 
 	return dinnerDateMap;
 }
@@ -178,6 +186,8 @@ bot.on('message', async (message) => {
 				const drawResults = drawDinnerDate(bot, dinnerDateStates[message.channel.id]);
 				
 				cleanDinnerDateDms(bot, dinnerDateStates[message.channel.id], activeDms);
+
+				console.dir(drawResults);
 				
 				// Send the dinner date results to their dates
 				await Promise.all(drawResults.map(([from, to]) => askOutDinnerDate(bot, from, to)));
