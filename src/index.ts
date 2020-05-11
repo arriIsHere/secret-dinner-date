@@ -174,16 +174,20 @@ bot.on('message', async (message) => {
 		}
 
 		else if(message.content === '!draw') {
-			const drawResults = drawDinnerDate(bot, dinnerDateStates[message.channel.id]);
-
-			cleanDinnerDateDms(bot, dinnerDateStates[message.channel.id], activeDms);
-
-			// Send the dinner date results to their dates
-			await Promise.all(drawResults.map(([from, to]) => askOutDinnerDate(bot, from, to)));
-			await message.channel.send("I sent the address of your :prince: :princess: charming in the DM :wink:");
-			await message.channel.send('Get them something nice to eat! :rose: :spaghetti:');
-
-			deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id, false);
+			if(!!dinnerDateStates[message.channel.id]) {
+				const drawResults = drawDinnerDate(bot, dinnerDateStates[message.channel.id]);
+				
+				cleanDinnerDateDms(bot, dinnerDateStates[message.channel.id], activeDms);
+				
+				// Send the dinner date results to their dates
+				await Promise.all(drawResults.map(([from, to]) => askOutDinnerDate(bot, from, to)));
+				await message.channel.send("I sent the address of your :prince: :princess: charming in the DM :wink:");
+				await message.channel.send('Get them something nice to eat! :rose: :spaghetti:');
+				
+				deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id, false);
+			} else {
+				await message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
+			}
 		}
 
 		// Waiting for confirm
