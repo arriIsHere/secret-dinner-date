@@ -51,11 +51,40 @@ function createDinnerDate(client: Discord.Client, dinnerDateInstances: {[key: st
 	};
 }
 
-async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, activeDms: {[key: string]: DinnerDateMember}, dinnerDateId: string): Promise<void> {
+async function askOutDinnerDate(client: Discord.Client, from: DinnerDateMember, to: DinnerDateMember): Promise<void> {
+	const toUserInfo = await client.users.fetch(to.discordUser);
+	const fromUserDm = await client.channels.fetch(from.dmChannel) as Discord.DMChannel;
+
+	await fromUserDm.send(`Your secret diner date is @${toUserInfo.tag}`);
+	await fromUserDm.send(`Their address is: ${to.address}`);
+}
+
+function drawDinnerDate(client: Discord.Client, dinnerDateInstance: DinnerDateInstance): Array<[DinnerDateMember, DinnerDateMember]> {
+
+	const unchosen = [...dinnerDateInstance.joined];
+
+	// Only deal with even instances
+	const dinnerDateMap: [DinnerDateMember, DinnerDateMember][] = dinnerDateInstance.joined.map((memeber, index) => {
+
+		let randomIndex;
+
+		//do {
+			randomIndex = Math.floor(Math.random() * (unchosen.length + 1));
+		//} while(unchosen[randomIndex] !== memeber);
+
+		const pair = unchosen[randomIndex];
+		unchosen.splice(randomIndex, 1);
+
+		return [memeber, pair];
+	});
+
+	return dinnerDateMap;
+}
+
+async function deleteDinnerDate(client: Discord.Client, dinnerDateInstances: { [key: string] : DinnerDateInstance}, activeDms: {[key: string]: DinnerDateMember}, dinnerDateId: string, deleteDms: boolean = true): Promise<void> {
 	// Remove all the dms
 	const dinnerDate = dinnerDateInstances[dinnerDateId];
-
-	await cleanDinnerDateDms(client, dinnerDate, activeDms);
+	if(deleteDms) await cleanDinnerDateDms(client, dinnerDate, activeDms);
 
 	// Delete the instance
 	delete dinnerDateInstances[dinnerDateId];
@@ -94,12 +123,10 @@ bot.on('message', async (message) => {
 				const guest = activeDms[message.channel.id];
 				guest.address = message.content;
 
-
-
 				// Send a response
-				message.channel.send('Awesome! Your address is now added to the list! You will get sent your dinner date\'s address when the drawing is over!\n if you want to change your address just reply to this message with the new one!');
+				await message.channel.send('Awesome! Your address is now added to the list! You will get sent your dinner date\'s address when the drawing is over!\n if you want to change your address just reply to this message with the new one!');
 			} else if(message.author.id !== bot.user?.id) {
-				message.channel.send('Looks like you\'re not part of any dinner dates :cry:.\nTry asking your mystery date out by saying `!join` in an active channel.\nOr, create your own plans using `!dinnerdate` on your server.');
+				await message.channel.send('Looks like you\'re not part of any dinner dates :cry:.\nTry asking your mystery date out by saying `!join` in an active channel.\nOr, create your own plans using `!dinnerdate` on your server.');
 			}
 		}
 
@@ -140,10 +167,23 @@ bot.on('message', async (message) => {
 
 				// Send the message even if they have already joined, something could have gone wrong
 				const openDm = await bot.channels.fetch(dateUser.dmChannel) as Discord.DMChannel;
-				openDm.send('Hello! thanks for joining the secret dinner date :spaghetti:!\nPlease reply to this message with your address!');
+				await openDm.send('Hello! thanks for joining the secret dinner date :spaghetti:!\nPlease reply to this message with your address!');
 			} else {
-				message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
+				await message.channel.send("Looks like there aren't any dinner dates active for this channel :grimacing: maybe you created one in a different channel?");
 			}
+		}
+
+		else if(message.content === '!draw') {
+			const drawResults = drawDinnerDate(bot, dinnerDateStates[message.channel.id]);
+
+			cleanDinnerDateDms(bot, dinnerDateStates[message.channel.id], activeDms);
+
+			// Send the dinner date results to their dates
+			await Promise.all(drawResults.map(([from, to]) => askOutDinnerDate(bot, from, to)));
+			await message.channel.send("I sent the address of your :prince: :princess: charming in the DM :wink:");
+			await message.channel.send('Get them something nice to eat! :rose: :spaghetti:');
+
+			deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id, false);
 		}
 
 		// Waiting for confirm
@@ -152,10 +192,10 @@ bot.on('message', async (message) => {
 			if(lowerCaseContent === 'yes' || lowerCaseContent === 'y') {
 				await deleteDinnerDate(bot, dinnerDateStates, activeDms, message.channel.id);
 				await createDinnerDate(bot, dinnerDateStates, message.author.id, message.channel.id);
-				message.channel.send('Cool! I\'ll rest this dinner date instance :wilted_rose:');
+				await message.channel.send('Cool! I\'ll rest this dinner date instance :wilted_rose:');
 			} else if(lowerCaseContent === 'no' || lowerCaseContent === 'n') {
 				dinnerDateStates[message.channel.id].waitingForConfirmReset = false;
-				message.channel.send('Gotcha! Gonna leave this dinner date open :rose:');
+				await message.channel.send('Gotcha! Gonna leave this dinner date open :rose:');
 			}
 		}
 	}
