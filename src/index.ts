@@ -62,9 +62,7 @@ async function askOutDinnerDate(client: Discord.Client, from: DinnerDateMember, 
 function drawDinnerDate(client: Discord.Client, dinnerDateInstance: DinnerDateInstance): Array<[DinnerDateMember, DinnerDateMember]> {
 
 	const unchosen = [...dinnerDateInstance.joined];
-
 	const extra = unchosen.length % 2 === 1 ? unchosen.pop() : undefined;
-
 	// Only deal with even instances
 	const dinnerDateMap: [DinnerDateMember, DinnerDateMember][] = [...unchosen].map((member) => {
 
@@ -113,7 +111,9 @@ async function cleanDinnerDateMemberDms(client: Discord.Client, dinnerDateMember
 	const botMessages = dmMessages.filter(({author: {id}}) => id === client.user?.id);
 
 	// Delete all messages in the list that the bot authored
-	await Promise.all(botMessages.map(async (message) => channel.messages.delete(message)))
+	await Promise.all(botMessages.map(async (message) => channel.messages.delete(message)));
+
+	console.log(`Cleaned DM for user ${dinnerDateMember.discordUser}, ${botMessages.length} messages deleted`);
 }
 
 bot.on('message', async (message) => {
@@ -187,10 +187,11 @@ bot.on('message', async (message) => {
 				
 				cleanDinnerDateDms(bot, dinnerDateStates[message.channel.id], activeDms);
 
-				console.dir(drawResults);
-				
 				// Send the dinner date results to their dates
-				await Promise.all(drawResults.map(([from, to]) => askOutDinnerDate(bot, from, to)));
+				await Promise.all(drawResults.map(async ([from, to]) => { 
+					await askOutDinnerDate(bot, from, to);
+					console.log(`Message for date sent to ${from.discordUser} with ${to.discordUser} address`);
+				}));
 				await message.channel.send("I sent the address of your :prince: :princess: charming in the DM :wink:");
 				await message.channel.send('Get them something nice to eat! :rose: :spaghetti:');
 				
