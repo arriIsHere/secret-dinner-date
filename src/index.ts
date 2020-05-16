@@ -1,5 +1,7 @@
 import * as Discord from 'discord.js';
 
+import Express from 'express';
+
 if(process.env.NODE_ENV === 'development') {
 	const discordConfig = require('../discordconfig.json');
 	process.env.DISCORD_TOKEN = process.env.DISCORD_TOKEN ?? discordConfig.token;
@@ -215,5 +217,14 @@ bot.on('message', async (message) => {
 		}
 	}
 });
+
+const app = Express();
+
+app.get('/wake', (req, res) => {
+	bot.login(process.env.DISCORD_TOKEN);
+	res.send('awoken!')
+});
+
+app.listen(process.env.PORT || 3000, () => console.log('server started'));
 
 bot.login(process.env.DISCORD_TOKEN);
