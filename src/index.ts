@@ -218,13 +218,12 @@ bot.on('message', async (message) => {
 	}
 });
 
-const app = Express();
+bot.login(process.env.DISCORD_TOKEN);
 
+// This part is optional, I use it to keep the heroku instance awake.
+const app = Express();
 app.get('/wake', (req, res) => {
 	bot.login(process.env.DISCORD_TOKEN);
 	res.send('awoken!')
 });
-
 app.listen(process.env.PORT || 3000, () => console.log('server started'));
-
-bot.login(process.env.DISCORD_TOKEN);
