@@ -1,22 +1,10 @@
 import * as Discord from 'discord.js';
 
-interface DinnerDateMember {
-	discordUser: string;
-	dmChannel: string;
-	dateInstance: DinnerDateInstance;
-	address?: string;
-}
+import {IDinnerDateInstance, IDinnerDateMember} from './modelTypes'
 
-interface DinnerDateInstance {
-	channel: string;
-	waitingForConfirmReset: boolean;
-	joined: DinnerDateMember[];
-	createdBy: string;
-}
+//const dinnerDateStates: { [key: string]: DinnerDateInstance} = {};
 
-const dinnerDateStates: { [key: string]: DinnerDateInstance} = {};
-
-const activeDms : {[key: string]: DinnerDateMember} = {};
+//const activeDms : {[key: string]: DinnerDateMember} = {};
 
 export function activeDMExists(channelId: string, authorId: string): boolean {
 	return !!activeDms[channelId] && activeDms[channelId].discordUser === authorId;
@@ -59,10 +47,10 @@ export function clearDinnerDateConfirm(channelId: string) : void {
 	dinnerDateStates[channelId].waitingForConfirmReset = false;
 }
 
-async function createDinnerDateUser(dinnerDate: DinnerDateInstance,user: Discord.User): Promise<DinnerDateMember> {
+async function createDinnerDateUser(dinnerDate: IDinnerDateInstance,user: Discord.User): Promise<IDinnerDateMember> {
 
 	const dm = await user.createDM();
-	const newDateUser: DinnerDateMember = {discordUser: user.id, dateInstance: dinnerDate, dmChannel: dm.id};
+	const newDateUser: IDinnerDateMember = {discordUser: user.id, dateInstance: dinnerDate, dmChannel: dm.id};
 
 	dinnerDate.joined.push(newDateUser);
 	activeDms[newDateUser.dmChannel] = newDateUser;
@@ -72,7 +60,7 @@ async function createDinnerDateUser(dinnerDate: DinnerDateInstance,user: Discord
 	return newDateUser;
 }
 
-export function createDinnerDate(createdBy: string, channel: string):DinnerDateInstance {
+export function createDinnerDate(createdBy: string, channel: string):IDinnerDateInstance {
 	return dinnerDateStates[channel] = {
 		channel, 
 		waitingForConfirmReset: false,
@@ -81,7 +69,7 @@ export function createDinnerDate(createdBy: string, channel: string):DinnerDateI
 	};
 }
 
-export async function askOutDinnerDate(client: Discord.Client, from: DinnerDateMember, to: DinnerDateMember): Promise<void> {
+export async function askOutDinnerDate(client: Discord.Client, from: IDinnerDateMember, to: IDinnerDateMember): Promise<void> {
 	const toUserInfo = await client.users.fetch(to.discordUser);
 	const fromUserDm = await client.channels.fetch(from.dmChannel) as Discord.DMChannel;
 
@@ -89,13 +77,13 @@ export async function askOutDinnerDate(client: Discord.Client, from: DinnerDateM
 	await fromUserDm.send(`Their address is: ${to.address}`);
 }
 
-export function drawDinnerDate(channelId: string): Array<[DinnerDateMember, DinnerDateMember]> {
+export function drawDinnerDate(channelId: string): Array<[IDinnerDateMember, IDinnerDateMember]> {
 
 	const dinnerDateInstance = dinnerDateStates[channelId];
 	const unchosen = [...dinnerDateInstance.joined];
 	const extra = unchosen.length % 2 === 1 ? unchosen.pop() : undefined;
 	// Only deal with even instances
-	const dinnerDateMap: [DinnerDateMember, DinnerDateMember][] = [...unchosen].map((member) => {
+	const dinnerDateMap: [IDinnerDateMember, IDinnerDateMember][] = [...unchosen].map((member) => {
 
 		let randomIndex;
 
@@ -134,7 +122,7 @@ export async function cleanDinnerDateDms(channelId: string, client: Discord.Clie
 	}));
 }
 
-async function cleanDinnerDateMemberDms(client: Discord.Client, dinnerDateMember: DinnerDateMember): Promise<void> {
+async function cleanDinnerDateMemberDms(client: Discord.Client, dinnerDateMember: IDinnerDateMember): Promise<void> {
 	const channel = await client.channels.fetch(dinnerDateMember.dmChannel) as Discord.DMChannel;
 
 	// Find all the messages, limit to 50 to preserve usage

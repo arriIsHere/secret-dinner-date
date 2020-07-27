@@ -63,12 +63,14 @@
     "@babel/preset-env": "^7.9.6",
     "@babel/preset-typescript": "^7.9.0",
     "@types/express": "^4.17.6",
+    "@types/mongoose": "^5.7.32",
     "@types/node": "^13.13.5",
     "babel-plugin-root-import": "^6.5.0",
     "typescript": "^3.8.3"
   },
   "dependencies": {
     "discord.js": "^12.2.0",
-    "express": "^4.17.1"
+    "express": "^4.17.1",
+    "mongoose": "^5.9.25"
   }
 }
