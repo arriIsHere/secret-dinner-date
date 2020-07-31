@@ -66,6 +66,7 @@
     "@types/mongoose": "^5.7.32",
     "@types/node": "^13.13.5",
     "babel-plugin-root-import": "^6.5.0",
+    "mongodb-memory-server": "^6.6.3",
     "typescript": "^3.8.3"
   },
   "dependencies": {

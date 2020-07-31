@@ -1,72 +1,88 @@
 import * as Discord from 'discord.js';
 
 import {IDinnerDateInstance, IDinnerDateMember} from './modelTypes'
+import { DinnerDateMember, DinnerDateInstance, DinnerDateInstanceDocument } from './databaseModel';
 
 //const dinnerDateStates: { [key: string]: DinnerDateInstance} = {};
 
 //const activeDms : {[key: string]: DinnerDateMember} = {};
 
-export function activeDMExists(channelId: string, authorId: string): boolean {
-	return !!activeDms[channelId] && activeDms[channelId].discordUser === authorId;
+export async function activeDMExists(channelId: string, authorId: string): Promise<boolean> {
+	const activeDM = await DinnerDateMember.findOne({dmChannel: channelId});
+
+	return !!activeDM && activeDM.discordUser === authorId;
 }
 
-export function activeDinnerDateExists(channelId: string): boolean {
-	return !!dinnerDateStates[channelId];
+export async function activeDinnerDateExists(channelId: string): Promise<boolean> {
+	return !!(await DinnerDateInstance.findOne({channel: channelId}))
 }
 
-export function waitingForConfirm(channelId: string): boolean {
-	return activeDinnerDateExists(channelId) && dinnerDateStates[channelId].waitingForConfirmReset;
+export async function waitingForConfirm(channelId: string): Promise<boolean> {
+	const dinnerDateInstance = await DinnerDateInstance.findOne({channel: channelId});
+	return !!dinnerDateInstance && dinnerDateInstance.waitingForConfirmReset;
 }
 
 export async function joinDinnerDate(author: Discord.User, channelId: string, bot: Discord.Client): Promise<void> {
-	const dinnerDate = dinnerDateStates[channelId];
+	const dinnerDate = await DinnerDateInstance.findOne({channel: channelId}).populate('joined');
+
+	if(!dinnerDate) {
+		return Promise.reject(`Dinner date instance for channel ${channelId} not found`);
+	}
 	
 	const dateUser = dinnerDate.joined.find(({discordUser}) => discordUser === author.id) ?? await createDinnerDateUser(dinnerDate, author);
 
-	// Send the message even if they have already joined, something could have gone wrong
-	const openDm = await bot.channels.fetch(dateUser.dmChannel) as Discord.DMChannel;
-	await openDm.send('Hello! thanks for joining the secret dinner date :spaghetti:!\nPlease reply to this message with your address!');
+	if(!!dateUser) {
+		// Send the message even if they have already joined, something could have gone wrong
+		const openDm = await bot.channels.fetch(dateUser.dmChannel) as Discord.DMChannel;
+		await openDm.send('Hello! thanks for joining the secret dinner date :spaghetti:!\nPlease reply to this message with your address!');
+	} else {
+		return Promise.reject(`Could not create Dinner date for user ${author.username}`);
+	}
 }
 
-export function addAddressToDinnerDate(message: Discord.Message): void {
+export async function addAddressToDinnerDate(message: Discord.Message): Promise<void> {
 
 	// Update the address
 	console.log(`Address updated for ${message.author.username}`);
 	console.log(`Address set to: ${message.content}`);
+
+	const guest = await DinnerDateMember.findOne({dmChannel: message.channel.id}).exec();
 	
-	const guest = activeDms[message.channel.id];
-	guest.address = message.content;
+	if(!!guest) {
+		guest.address = message.content;
+		await DinnerDateMember.findByIdAndUpdate(guest._id, {address: message.content});
+	}
 }
 
-export function waitForDinnerDateConfirm(channelId: string): void {
-	dinnerDateStates[channelId].waitingForConfirmReset = true;
+export async function waitForDinnerDateConfirm(channelId: string): Promise<void> {
+	await DinnerDateInstance.findOneAndUpdate({channel: channelId}, {waitingForConfirmReset: true}).exec();
 	console.log(`Attempt made to create duplicate dinner date for channel ${channelId}`);
 }
 
-export function clearDinnerDateConfirm(channelId: string) : void {
-	dinnerDateStates[channelId].waitingForConfirmReset = false;
+export async function clearDinnerDateConfirm(channelId: string) : Promise<void> {
+	await DinnerDateInstance.findOneAndUpdate({channel: channelId}, {waitingForConfirmReset: false}).exec();
 }
 
-async function createDinnerDateUser(dinnerDate: IDinnerDateInstance,user: Discord.User): Promise<IDinnerDateMember> {
+async function createDinnerDateUser(dinnerDate: DinnerDateInstanceDocument,user: Discord.User): Promise<IDinnerDateMember> {
 
 	const dm = await user.createDM();
-	const newDateUser: IDinnerDateMember = {discordUser: user.id, dateInstance: dinnerDate, dmChannel: dm.id};
+	const newDateUser = await DinnerDateMember.create({discordUser: user.id, dateInstance: dinnerDate, dmChannel: dm.id});
 
 	dinnerDate.joined.push(newDateUser);
-	activeDms[newDateUser.dmChannel] = newDateUser;
+	await dinnerDate.save();
 
 	console.log(`User ${user.username} added to the dinner date drawing`);
 
 	return newDateUser;
 }
 
-export function createDinnerDate(createdBy: string, channel: string):IDinnerDateInstance {
-	return dinnerDateStates[channel] = {
+export async function createDinnerDate(createdBy: string, channel: string):Promise<IDinnerDateInstance> {
+	return DinnerDateInstance.create({		
 		channel, 
 		waitingForConfirmReset: false,
 		joined: [], 
 		createdBy
-	};
+	});
 }
 
 export async function askOutDinnerDate(client: Discord.Client, from: IDinnerDateMember, to: IDinnerDateMember): Promise<void> {
@@ -77,9 +93,14 @@ export async function askOutDinnerDate(client: Discord.Client, from: IDinnerDate
 	await fromUserDm.send(`Their address is: ${to.address}`);
 }
 
-export function drawDinnerDate(channelId: string): Array<[IDinnerDateMember, IDinnerDateMember]> {
+export async function drawDinnerDate(channelId: string): Promise<Array<[IDinnerDateMember, IDinnerDateMember]>> {
 
-	const dinnerDateInstance = dinnerDateStates[channelId];
+	const dinnerDateInstance = await DinnerDateInstance.findOne({channel: channelId}).populate('joined').exec();
+
+	if(!dinnerDateInstance) {
+		return Promise.reject(`Could not find dinner date instance for ${channelId}`);
+	}
+
 	const unchosen = [...dinnerDateInstance.joined];
 	const extra = unchosen.length % 2 === 1 ? unchosen.pop() : undefined;
 	// Only deal with even instances
@@ -111,14 +132,19 @@ export async function deleteDinnerDate(client: Discord.Client, dinnerDateId: str
 	if(deleteDms) await cleanDinnerDateDms(dinnerDateId, client);
 
 	// Delete the instance
-	delete dinnerDateStates[dinnerDateId];
+	await DinnerDateInstance.findOneAndRemove({channel: dinnerDateId});
 }
 
 export async function cleanDinnerDateDms(channelId: string, client: Discord.Client): Promise<void> {
-	const dinnerDateInstance = dinnerDateStates[channelId];
+	const dinnerDateInstance = await DinnerDateInstance.findOne({channel: channelId}).populate('joined').exec();
+
+	if(!dinnerDateInstance) {
+		return Promise.reject(`could not find dinner date instance for channel ${channelId}`);
+	}
+	
 	await Promise.all(dinnerDateInstance.joined.map(async (member) => {
 		await cleanDinnerDateMemberDms(client, member);
-		delete activeDms[member.dmChannel];
+		await DinnerDateMember.findOneAndRemove({dmChannel: member.dmChannel});
 	}));
 }
 
